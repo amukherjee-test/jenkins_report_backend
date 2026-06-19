@@ -2,80 +2,85 @@ pipeline {
     agent any
 
     environment {
-        APP_DIR = '/opt/jenkins-report-backend'
         APP_NAME = 'jenkins-report-backend'
+        REPO_URL = 'https://github.com/amukherjee-test/jenkins_report_backend.git'
     }
 
     stages {
 
+        stage('Check Node.js') {
+            steps {
+                sh 'node -v && npm -v'
+            }
+        }
+
         stage('Checkout') {
             steps {
-                // Pull latest code from the repo into a fixed directory on the VM
-                sh """
-                    if [ -d "${APP_DIR}/.git" ]; then
-                        git -C ${APP_DIR} pull
+                // Deploy to the Jenkins user home — no permission issues
+                sh '''
+                    APP_DIR="$HOME/jenkins-report-backend"
+                    if [ -d "$APP_DIR/.git" ]; then
+                        git -C "$APP_DIR" pull
                     else
-                        git clone ${env.GIT_URL ?: 'https://github.com/amukherjee-test/jenkins_report_backend.git'} ${APP_DIR}
+                        git clone $REPO_URL "$APP_DIR"
                     fi
-                """
+                '''
             }
         }
 
         stage('Install & Build') {
             steps {
-                sh """
-                    cd ${APP_DIR}
+                sh '''
+                    cd "$HOME/jenkins-report-backend"
                     npm install
                     npm run build
-                """
+                '''
             }
         }
 
         stage('Write .env') {
             steps {
-                // Store your .env as a Jenkins "Secret file" credential with ID: REPORT_BACKEND_ENV
                 withCredentials([file(credentialsId: 'REPORT_BACKEND_ENV', variable: 'ENV_FILE')]) {
-                    sh "cp \$ENV_FILE ${APP_DIR}/.env"
+                    sh 'cp $ENV_FILE "$HOME/jenkins-report-backend/.env"'
                 }
             }
         }
 
         stage('Install PM2') {
             steps {
-                sh 'npm list -g pm2 || npm install -g pm2'
+                // Install PM2 locally — no sudo needed
+                sh '''
+                    cd "$HOME/jenkins-report-backend"
+                    npm install pm2
+                '''
             }
         }
 
         stage('Start / Restart App') {
             steps {
-                sh """
-                    cd ${APP_DIR}
+                sh '''
+                    cd "$HOME/jenkins-report-backend"
+                    PM2="./node_modules/.bin/pm2"
 
-                    if pm2 list | grep -q "${APP_NAME}"; then
-                        pm2 restart ${APP_NAME}
+                    if $PM2 list | grep -q "$APP_NAME"; then
+                        $PM2 restart $APP_NAME
                     else
-                        pm2 start dist/index.js --name ${APP_NAME}
+                        $PM2 start dist/index.js --name $APP_NAME
                     fi
 
-                    pm2 save
-                """
-            }
-        }
-
-        stage('Enable Auto-start on Reboot') {
-            steps {
-                // Run once — sets up PM2 to start on system boot
-                sh 'pm2 startup || true'
+                    $PM2 save
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "Backend is running. Check status with: pm2 status"
+            sh '$HOME/jenkins-report-backend/node_modules/.bin/pm2 status'
+            echo 'Backend is running.'
         }
         failure {
-            echo "Deployment failed. Check logs with: pm2 logs ${APP_NAME}"
+            echo 'Deployment failed. Check the stage logs above.'
         }
     }
 }
