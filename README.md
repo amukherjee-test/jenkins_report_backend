@@ -1,6 +1,19 @@
 # Jenkins Report Backend
 
-Fetches build reports from Jenkins and stores them as JSON files on disk.
+Receives test reports pushed from Jenkins pipelines and stores them in MongoDB.
+Handles multiple test suites per build via JUnit XML.
+
+---
+
+## Architecture
+
+```
+Jenkins Pipeline (Groovy)
+    │
+    ├─ POST /api/runs              → create a run
+    ├─ POST /api/runs/:id/results  → send JUnit XML (one call per suite/file)
+    └─ PATCH /api/runs/:id/finish  → finalize and compute summary
+```
 
 ---
 
@@ -12,31 +25,19 @@ npm install
 
 ---
 
-## Step 2 — Create your `.env` file
+## Step 2 — Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the three values:
+Edit `.env`:
 
 ```
 PORT=3000
-JENKINS_URL=http://your-jenkins:8080
-JENKINS_USER=your-username
-JENKINS_TOKEN=your-api-token
+MONGODB_URI=mongodb://localhost:27017/jenkins-reports
+ADMIN_SECRET=change-this-to-a-strong-secret
 ```
-
-### How to get your Jenkins API Token
-
-1. Open Jenkins in your browser and log in
-2. Click your name in the top-right corner
-3. Click **Configure**
-4. Scroll down to **API Token**
-5. Click **Add new Token**, give it a name, click **Generate**
-6. Copy the token and paste it as `JENKINS_TOKEN` in `.env`
-
-> Use your API token, not your login password.
 
 ---
 
@@ -46,38 +47,64 @@ JENKINS_TOKEN=your-api-token
 npm run dev
 ```
 
-You should see:
-
-```
-Server running on port 3000
-```
-
 ---
 
-## Step 4 — Fetch a report from Jenkins
+## Step 4 — Create a project and get an API key
 
-Send a POST request with the job name and build number:
+Every Jenkins job needs a project registered in the backend first.
+Run this once per project:
 
 ```bash
-curl -X POST http://localhost:3000/api/jenkins/fetch \
+curl -X POST http://localhost:3000/api/projects \
   -H "Content-Type: application/json" \
-  -d '{"jobName": "my-job", "buildNumber": 5}'
+  -H "X-Admin-Secret: your-admin-secret" \
+  -d '{"name": "my-project", "description": "optional"}'
 ```
 
-**How to find your job name and build number:**
-- Open the build in Jenkins — the URL looks like `http://your-jenkins:8080/job/my-job/5/`
-- `my-job` is the job name, `5` is the build number
+Response:
+```json
+{
+  "apiKey": "abc123...",
+  "project": { "_id": "...", "name": "my-project" }
+}
+```
+
+**Save the `apiKey` — it is shown only once.**
 
 ---
 
-## Step 5 — Check the stored files
+## Step 5 — Add the API key to Jenkins
 
-After a successful fetch, files are saved under the `reports/` folder:
+1. Go to **Jenkins → Manage Jenkins → Credentials**
+2. Add a **Secret text** credential
+3. Set the ID to `REPORT_API_KEY` and paste the `apiKey` as the value
 
+---
+
+## Step 6 — Add the Jenkinsfile to your repo
+
+Copy the `Jenkinsfile` from this repo into the root of the project you want to report on.
+
+Update two lines at the top:
+
+```groovy
+BACKEND_URL = 'http://your-backend:3000'   // your backend's URL
+API_KEY     = credentials('REPORT_API_KEY') // must match the credential ID from Step 5
 ```
-reports/
-└── my-job/
-    └── 5/
-        ├── build.json        # build metadata (status, duration, commit, etc.)
-        └── test-report.json  # test results (only present if the build ran tests)
-```
+
+Replace the `sh 'npm test'` line with your actual test command. The pipeline expects JUnit XML output under `**/test-results/**/*.xml` or `**/surefire-reports/**/*.xml`.
+
+---
+
+## Step 7 — Run the pipeline
+
+Trigger a build in Jenkins. After tests finish the pipeline will automatically:
+
+1. Create a run record in the backend
+2. Send all JUnit XML files as test results
+3. Finalize the run with a pass/fail summary
+
+### Jenkins plugin required
+
+The `Jenkinsfile` uses the **HTTP Request** plugin. Install it at:
+**Manage Jenkins → Plugins → Available → HTTP Request**

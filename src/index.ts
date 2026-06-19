@@ -8,7 +8,6 @@ import connectDB from './config/db';
 import projectsRouter from './routes/projects';
 import runsRouter from './routes/runs';
 import analyticsRouter from './routes/analytics';
-import jenkinsRouter from './routes/jenkins';
 
 const app = express();
 
@@ -30,7 +29,6 @@ app.get('/health', (_req: Request, res: Response) =>
 app.use('/api/projects', projectsRouter);
 app.use('/api/runs', runsRouter);
 app.use('/api/analytics', analyticsRouter);
-app.use('/api/jenkins', jenkinsRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
