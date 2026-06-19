@@ -108,3 +108,44 @@ Trigger a build in Jenkins. After tests finish the pipeline will automatically:
 
 The `Jenkinsfile` uses the **HTTP Request** plugin. Install it at:
 **Manage Jenkins → Plugins → Available → HTTP Request**
+
+---
+
+## Deploying the backend to the VM via Jenkins
+
+If you can only access the VM through Jenkins, use `Jenkinsfile.deploy` to install and run the backend directly on the VM. It uses **PM2** to keep the backend alive permanently, including after reboots.
+
+### One-time setup
+
+**1. Add your `.env` as a Jenkins secret file**
+- Go to **Jenkins → Manage Jenkins → Credentials**
+- Add a **Secret file** credential
+- Set the ID to `REPORT_BACKEND_ENV`
+- Upload your `.env` file as the content
+
+**2. Create a new Jenkins pipeline job**
+- New Item → Pipeline
+- Under Pipeline, set:
+  - Definition: `Pipeline script from SCM`
+  - SCM: Git → your repo URL
+  - Script Path: `Jenkinsfile.deploy`
+
+**3. Run the job**
+
+Jenkins will:
+1. Clone the repo to `/opt/jenkins-report-backend` on the VM
+2. Install dependencies and compile TypeScript
+3. Write the `.env` file from the Jenkins secret
+4. Install PM2 (if not already installed)
+5. Start the backend and register it to survive reboots
+
+### Useful PM2 commands (run on VM or via Jenkins shell)
+
+```bash
+pm2 status                          # check if the app is running
+pm2 logs jenkins-report-backend     # view live logs
+pm2 restart jenkins-report-backend  # restart the app
+pm2 stop jenkins-report-backend     # stop the app
+```
+
+After the first deploy, re-run the job anytime you want to deploy updates.
