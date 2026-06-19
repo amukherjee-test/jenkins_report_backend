@@ -113,7 +113,10 @@ The `Jenkinsfile` uses the **HTTP Request** plugin. Install it at:
 
 ## Deploying the backend to the VM via Jenkins
 
-If you can only access the VM through Jenkins, use `Jenkinsfile.deploy` to install and run the backend directly on the VM. It uses **PM2** to keep the backend alive permanently, including after reboots.
+If you can only access the VM through Jenkins, use `Jenkinsfile.deploy` to install and run the backend directly on the VM.
+
+**What is PM2?**
+PM2 is a process manager for Node.js. It keeps the backend running in the background — if the app crashes it automatically restarts it, and it can survive VM reboots. Think of it as a watchdog for the backend process.
 
 ### One-time setup
 
@@ -133,19 +136,19 @@ If you can only access the VM through Jenkins, use `Jenkinsfile.deploy` to insta
 **3. Run the job**
 
 Jenkins will:
-1. Clone the repo to `/opt/jenkins-report-backend` on the VM
+1. Clone the repo to `~/jenkins-report-backend` on the VM
 2. Install dependencies and compile TypeScript
 3. Write the `.env` file from the Jenkins secret
-4. Install PM2 (if not already installed)
-5. Start the backend and register it to survive reboots
+4. Install PM2 inside the project (no sudo needed)
+5. Start the backend — it will keep running permanently
 
-### Useful PM2 commands (run on VM or via Jenkins shell)
+### Useful PM2 commands (run inside `~/jenkins-report-backend` on the VM)
 
 ```bash
-pm2 status                          # check if the app is running
-pm2 logs jenkins-report-backend     # view live logs
-pm2 restart jenkins-report-backend  # restart the app
-pm2 stop jenkins-report-backend     # stop the app
+./node_modules/.bin/pm2 status                          # check if the app is running
+./node_modules/.bin/pm2 logs jenkins-report-backend     # view live logs
+./node_modules/.bin/pm2 restart jenkins-report-backend  # restart the app
+./node_modules/.bin/pm2 stop jenkins-report-backend     # stop the app
 ```
 
 After the first deploy, re-run the job anytime you want to deploy updates.
