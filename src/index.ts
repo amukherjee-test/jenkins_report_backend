@@ -8,6 +8,7 @@ import connectDB from './config/db';
 import projectsRouter from './routes/projects';
 import runsRouter from './routes/runs';
 import analyticsRouter from './routes/analytics';
+import jenkinsRouter from './routes/jenkins';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.get('/health', (_req: Request, res: Response) =>
 app.use('/api/projects', projectsRouter);
 app.use('/api/runs', runsRouter);
 app.use('/api/analytics', analyticsRouter);
+app.use('/api/jenkins', jenkinsRouter);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error(err);
@@ -37,9 +39,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 const PORT = process.env.PORT;
 
-connectDB()
-  .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
-  .catch((err: Error) => {
-    console.error('DB connection failed:', err);
-    process.exit(1);
-  });
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// MongoDB is optional — connect in the background; routes that need it will fail gracefully if it's down
+connectDB().catch((err: Error) => console.error('MongoDB connection failed:', err));
